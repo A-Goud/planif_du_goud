@@ -62,7 +62,7 @@ mip_rel_gap = ${options.gap ?? 0.01}
 `);
         const t0 = Date.now();
         await new Promise<void>((resolve, reject) => {
-          const child = spawn(binary, ["--model_file", lp, "--options_file", opt, "--solution_file", sol], { stdio: "ignore", signal, windowsHide: true });
+          const child = spawn(binary, ["--model_file", lp, "--options_file", opt, "--solution_file", sol], { stdio: "ignore", signal, windowsHide: true, cwd: dir });
           child.on("error", reject);
           child.on("exit", () => resolve());
         });
