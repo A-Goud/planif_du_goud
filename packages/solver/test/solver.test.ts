@@ -501,3 +501,90 @@ describe("délégation : un niveau alimente le suivant", () => {
     for (const a of level2.planning.assignments) expect(granted).toContain(`${a.day}|${a.start}`);
   });
 });
+
+describe("horaires d'ouverture à rythme de plusieurs semaines", () => {
+  const everyOther = (weekOffset: number) => [{ days: [0], start: "17:00", end: "19:00", everyKWeeks: 2, weekOffset }];
+
+  it("une salle ouverte une semaine sur deux n'accueille pas une séance hebdomadaire", async () => {
+    const s = space({
+      resources: [room("r1", { weekly: everyOther(0) })],
+      demands: [demand("hebdo"), demand("quinzaine", { everyKWeeks: 2, requesterId: "b" })],
+    });
+    const r = await solve(s);
+    expect(r.planning.cycleWeeks).toBe(2);
+    expect(r.unsatisfied.map((o) => o.demandId)).toEqual(["hebdo"]);
+    const [a] = placed(r, "quinzaine");
+    expect(a!.cycleWeek).toBe(0); // la salle n'est ouverte qu'aux semaines 0, 2, 4…
+  });
+
+  it("choisit le décalage qui correspond aux semaines d'ouverture", async () => {
+    const s = space({
+      resources: [room("r1", { weekly: everyOther(1) })],
+      demands: [demand("quinzaine", { everyKWeeks: 2 })],
+    });
+    const r = await solve(s);
+    expect(placed(r, "quinzaine")[0]!.cycleWeek).toBe(1);
+  });
+
+  it("deux rythmes complémentaires couvrent chaque semaine", async () => {
+    const s = space({
+      resources: [room("r1", { weekly: [...everyOther(0), ...everyOther(1)] })],
+      demands: [demand("hebdo", { durationUnits: 8 })],
+    });
+    const r = await solve(s);
+    expect(r.unsatisfied).toHaveLength(0);
+  });
+
+  it("délégation d'une séance à rythme : le niveau suivant ne reçoit qu'une semaine sur deux", async () => {
+    const { buildDelegation } = await import("@planif/core");
+    const town = space({
+      resources: [room("r1", { weekly: [{ days: [0], start: "17:00", end: "19:00" }] })],
+      demands: [demand("quinzaine", { everyKWeeks: 2, durationUnits: 8, requesterId: "a" })],
+    });
+    const level1 = await solve(town);
+    expect(level1.unsatisfied).toHaveLength(0);
+    const { space: club, warnings } = buildDelegation({ ...town, plannings: [level1.planning] }, { requesterId: "a", periodIds: ["p"] });
+    expect(warnings).toEqual([]);
+
+    const level2 = await solve(
+      spaceSchema.parse({
+        ...club,
+        requesters: [{ id: "s1", name: "S1" }, { id: "s2", name: "S2" }],
+        demands: [
+          demand("sect1", { requesterId: "s1", everyKWeeks: 2, durationUnits: 8, priority: 4 }),
+          demand("sect2", { requesterId: "s2", everyKWeeks: 2, durationUnits: 8, priority: 2 }), // même créneau : ne tient pas
+          demand("hebdo", { requesterId: "s2", durationUnits: 8, priority: 5 }), // une semaine sur deux seulement : impossible
+        ],
+      }),
+    );
+    expect(placed(level2, "sect1")).toHaveLength(1);
+    expect(level2.unsatisfied.map((o) => o.demandId).sort()).toEqual(["hebdo", "sect2"]);
+  });
+});
+
+describe("équité entre demandes", () => {
+  // une seule plage d'1 h par jour, 3 jours : 3 séances possibles en tout
+  const scarce = (extra: unknown[]) =>
+    space({ resources: [room("r1", { weekly: [{ days: [0, 1, 2], start: "17:00", end: "18:00" }] })], demands: extra });
+
+  it("partage le manque entre deux demandes de même priorité", async () => {
+    const s = scarce([demand("a", { sessions: 3, requesterId: "a" }), demand("b", { sessions: 3, requesterId: "b" })]);
+    const r = await solve(s, { weights: { equity: 0.5 } });
+    expect(placed(r, "a").length).toBeGreaterThanOrEqual(1);
+    expect(placed(r, "b").length).toBeGreaterThanOrEqual(1);
+    expect(placed(r, "a").length + placed(r, "b").length).toBe(3);
+  });
+
+  it("la priorité l'emporte sur l'équité", async () => {
+    const s = scarce([demand("haute", { sessions: 3, priority: 5 }), demand("basse", { sessions: 3, priority: 1, requesterId: "b" })]);
+    const r = await solve(s); // équité par défaut
+    expect(placed(r, "haute")).toHaveLength(3);
+    expect(placed(r, "basse")).toHaveLength(0);
+  });
+
+  it("ne change rien quand tout tient", async () => {
+    const s = space({ resources: [room("r1")], demands: [demand("a", { sessions: 3 }), demand("b", { sessions: 2, requesterId: "b" })] });
+    const r = await solve(s);
+    expect(r.unsatisfied).toHaveLength(0);
+  });
+});

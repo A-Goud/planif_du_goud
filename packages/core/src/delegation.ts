@@ -45,31 +45,22 @@ export function buildDelegation(space: Space, options: DelegationOptions): Deleg
   const periods = space.periods.filter((p) => options.periodIds.includes(p.id));
   const warnings: string[] = [];
 
-  // (salle, période, jour) -> intervalles [début, fin) en unités de 15 min
+  // (salle, période, jour, rythme, décalage) -> intervalles [début, fin) en unités de 15 min
   const raw = new Map<string, [number, number][]>();
   let sessionCount = 0;
-  let skipped = 0;
   for (const period of periods) {
     const planning = space.plannings.find((p) => p.periodId === period.id);
     for (const a of planning?.assignments ?? []) {
       const d = demands.get(a.demandId);
       if (!d) continue;
-      if (d.everyKWeeks > 1) {
-        skipped++;
-        continue;
-      }
       const s = parseTime(a.start);
-      const key = `${a.resourceId}|${period.id}|${a.day}`;
+      // une séance toutes les k semaines devient un créneau qui n'existe qu'une semaine sur k
+      const key = `${a.resourceId}|${period.id}|${a.day}|${d.everyKWeeks}|${a.cycleWeek % d.everyKWeeks}`;
       const list = raw.get(key);
       if (list) list.push([s, s + d.durationUnits]);
       else raw.set(key, [[s, s + d.durationUnits]]);
       sessionCount++;
     }
-  }
-  if (skipped > 0) {
-    warnings.push(
-      `${skipped} séance(s) à rythme de plusieurs semaines n'ont pas été transmises : un créneau qui n'existe qu'une semaine sur deux ne peut pas encore être décrit dans le fichier.`,
-    );
   }
   for (const period of periods) {
     if (!space.plannings.some((p) => p.periodId === period.id && p.assignments.length > 0)) {
@@ -78,10 +69,10 @@ export function buildDelegation(space: Space, options: DelegationOptions): Deleg
   }
 
   // Fusion des intervalles qui se touchent
-  type Slot = { resourceId: string; periodId: string; day: number; start: number; end: number };
+  type Slot = { resourceId: string; periodId: string; day: number; k: number; offset: number; start: number; end: number };
   const slots: Slot[] = [];
   for (const [key, list] of raw) {
-    const [resourceId, periodId, day] = key.split("|") as [string, string, string];
+    const [resourceId, periodId, day, k, offset] = key.split("|") as [string, string, string, string, string];
     const sorted = [...list].sort((x, y) => x[0] - y[0]);
     const merged: [number, number][] = [];
     for (const [s, e] of sorted) {
@@ -89,7 +80,7 @@ export function buildDelegation(space: Space, options: DelegationOptions): Deleg
       if (last && s <= last[1]) last[1] = Math.max(last[1], e);
       else merged.push([s, e]);
     }
-    for (const [s, e] of merged) slots.push({ resourceId, periodId, day: Number(day), start: s, end: e });
+    for (const [s, e] of merged) slots.push({ resourceId, periodId, day: Number(day), k: Number(k), offset: Number(offset), start: s, end: e });
   }
 
   // Regroupement : mêmes horaires -> jours réunis, puis mêmes jours -> périodes réunies
@@ -97,21 +88,21 @@ export function buildDelegation(space: Space, options: DelegationOptions): Deleg
   const resourceIds = [...new Set(slots.map((s) => s.resourceId))];
   for (const resourceId of resourceIds) {
     const mine = slots.filter((s) => s.resourceId === resourceId);
-    const perPeriodHours = new Map<string, Set<number>>(); // période|début|fin -> jours
+    const perPeriodHours = new Map<string, Set<number>>(); // période|rythme|décalage|début|fin -> jours
     for (const s of mine) {
-      const k = `${s.periodId}|${s.start}|${s.end}`;
+      const k = `${s.periodId}|${s.k}|${s.offset}|${s.start}|${s.end}`;
       const set = perPeriodHours.get(k);
       if (set) set.add(s.day);
       else perPeriodHours.set(k, new Set([s.day]));
     }
-    const perDays = new Map<string, { days: number[]; start: number; end: number; periods: Set<string> }>();
-    for (const [k, days] of perPeriodHours) {
-      const [periodId, start, end] = k.split("|") as [string, string, string];
+    const perDays = new Map<string, { days: number[]; k: number; offset: number; start: number; end: number; periods: Set<string> }>();
+    for (const [key, days] of perPeriodHours) {
+      const [periodId, k, offset, start, end] = key.split("|") as [string, string, string, string, string];
       const sortedDays = [...days].sort((a, b) => a - b);
-      const k2 = `${sortedDays.join(",")}|${start}|${end}`;
+      const k2 = `${sortedDays.join(",")}|${k}|${offset}|${start}|${end}`;
       const entry = perDays.get(k2);
       if (entry) entry.periods.add(periodId);
-      else perDays.set(k2, { days: sortedDays, start: Number(start), end: Number(end), periods: new Set([periodId]) });
+      else perDays.set(k2, { days: sortedDays, k: Number(k), offset: Number(offset), start: Number(start), end: Number(end), periods: new Set([periodId]) });
     }
     const all = new Set(periods.map((p) => p.id));
     byResource.set(
@@ -121,6 +112,8 @@ export function buildDelegation(space: Space, options: DelegationOptions): Deleg
         start: formatTime(e.start),
         end: e.end >= 96 ? "24:00" : formatTime(e.end),
         periodIds: e.periods.size === all.size ? [] : [...e.periods].sort(),
+        everyKWeeks: e.k,
+        weekOffset: e.offset,
       })),
     );
   }

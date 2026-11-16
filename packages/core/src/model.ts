@@ -46,8 +46,13 @@ export const weeklyRuleSchema = z
     end: endTime,
     /** Périodes concernées. Vide = toutes les périodes. */
     periodIds: z.array(id).default([]),
+    /** Une semaine sur k (1 = chaque semaine). Les semaines se comptent depuis le début de la période. */
+    everyKWeeks: z.number().int().min(1).max(4).default(1),
+    /** Décalage dans ce rythme : la règle vaut aux semaines weekOffset, weekOffset + k, ... */
+    weekOffset: z.number().int().min(0).default(0),
   })
-  .refine(endAfterStart, "la fin doit suivre le début");
+  .refine(endAfterStart, "la fin doit suivre le début")
+  .refine((r) => r.weekOffset < r.everyKWeeks, "le décalage doit être inférieur au rythme");
 
 /** Exception datée : fermé toute la journée, ou ouvert sur une plage particulière. */
 export const exceptionSchema = z.object({

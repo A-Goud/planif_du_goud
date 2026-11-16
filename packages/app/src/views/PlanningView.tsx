@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   UNITS_PER_DAY,
-  cycleLength,
+  periodCycleWeeks,
+  ruleAppliesInWeek,
   demandsOfPeriod,
   formatTime,
   parseEndTime,
@@ -36,6 +37,7 @@ export function PlanningView() {
   const [timeLimit, setTimeLimit] = useState(60);
   const [stability, setStability] = useState<StabilityChoice>("each");
   const [referenceChoice, setReferenceChoice] = useState("auto");
+  const [equity, setEquity] = useState(0.3);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<SolveOutcome | null>(null);
@@ -97,7 +99,7 @@ export function PlanningView() {
     return commit({ ...space, plannings: [...others, next] });
   };
   const basePlanning = (): Planning | null =>
-    period ? (planning ?? { periodId: period.id, cycleWeeks: cycleLength(demands), assignments: [], blocked: [] }) : null;
+    period ? (planning ?? { periodId: period.id, cycleWeeks: periodCycleWeeks(space, period.id), assignments: [], blocked: [] }) : null;
   const setAssignments = (assignments: Assignment[]) => {
     const base = basePlanning();
     if (base) setError(savePlanning({ ...base, assignments })?.join(" ; ") ?? null);
@@ -112,6 +114,7 @@ export function PlanningView() {
       startStep: Math.max(1, stepMinutes / 15),
       reference: referencePlanning(),
       stabilityOverride: stability === "each" ? undefined : stability,
+      weights: { equity },
       solverOptions: { timeLimitSec: timeLimit, gap: 0.01 },
       baseline: last && last.planning.periodId === period.id ? last : undefined,
     }, companionUrl);
@@ -154,6 +157,7 @@ export function PlanningView() {
       startStep: Math.max(1, stepMinutes / 15),
       reference: referencePlanning(),
       stabilityOverride: stability === "each" ? undefined : stability,
+      weights: { equity },
       freezeExisting,
       solverOptions: { timeLimitSec: timeLimit, gap: 0.01 },
     }, companionUrl);
@@ -206,6 +210,14 @@ export function PlanningView() {
             <option value="auto">Période précédente</option>
             <option value="none">Aucune</option>
             {referencePeriods.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Équité entre demandes</span>
+          <select value={equity} onChange={(e) => setEquity(Number(e.target.value))} title="Évite qu'une demande reçoive toutes ses séances pendant qu'une autre de même priorité n'en reçoit aucune">
+            <option value={0}>Aucune (maximiser le nombre de séances)</option>
+            <option value={0.3}>Moyenne</option>
+            <option value={0.6}>Forte</option>
           </select>
         </label>
         <label className="field">
@@ -407,7 +419,7 @@ function Calendar({ space, periodId, resourceId, assignments, blocked, week, dem
     .filter(({ a }) => (a.resourceId === resourceId || demandsById.get(a.demandId)?.needsResourceIds.includes(resourceId)) && occursInWeek(a, demandsById.get(a.demandId), week));
   const blocks = blocked.filter((b) => b.resourceId === resourceId && (b.cycleWeek === undefined || b.cycleWeek === week));
 
-  const opens = weeklyRulesFor(resource, periodId).flatMap((w) => w.days.map((d) => ({ d, s: parseTime(w.start), e: parseEndTime(w.end) })));
+  const opens = weeklyRulesFor(resource, periodId).filter((w) => ruleAppliesInWeek(w, week)).flatMap((w) => w.days.map((d) => ({ d, s: parseTime(w.start), e: parseEndTime(w.end) })));
   const spans = [
     ...opens.map((o) => [o.s, o.e] as const),
     ...blocks.map((b) => [parseTime(b.range.start), parseEndTime(b.range.end)] as const),

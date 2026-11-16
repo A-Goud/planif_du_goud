@@ -8,7 +8,7 @@ function blank(): Resource {
 }
 
 function summary(r: Resource): string {
-  return r.weekly.map((w) => `${w.days.map((d) => DAY_NAMES[d]).join(" ")} ${w.start}–${w.end}${w.periodIds.length ? " (certaines périodes)" : ""}`).join(" · ") || "aucun horaire";
+  return r.weekly.map((w) => `${w.days.map((d) => DAY_NAMES[d]).join(" ")} ${w.start}–${w.end}${w.everyKWeeks > 1 ? ` (1 semaine sur ${w.everyKWeeks})` : ""}${w.periodIds.length ? " (certaines périodes)" : ""}`).join(" · ") || "aucun horaire";
 }
 
 export function ResourcesView() {
@@ -90,10 +90,22 @@ export function ResourcesView() {
               <TimeSelect value={w.start} onChange={(start) => setDraft({ ...draft, weekly: draft.weekly.map((x, j) => (j === i ? { ...x, start } : x)) })} />
               <span>à</span>
               <TimeSelect allowEnd value={w.end} onChange={(end) => setDraft({ ...draft, weekly: draft.weekly.map((x, j) => (j === i ? { ...x, end } : x)) })} />
+              <select
+                aria-label="Rythme"
+                value={`${w.everyKWeeks}:${w.weekOffset}`}
+                onChange={(e) => {
+                  const [k, o] = e.target.value.split(":").map(Number) as [number, number];
+                  setDraft({ ...draft, weekly: draft.weekly.map((x, j) => (j === i ? { ...x, everyKWeeks: k, weekOffset: o } : x)) });
+                }}
+              >
+                <option value="1:0">chaque semaine</option>
+                <option value="2:0">semaines 1, 3, 5… (une sur deux)</option>
+                <option value="2:1">semaines 2, 4, 6… (une sur deux)</option>
+              </select>
               <button type="button" onClick={() => setDraft({ ...draft, weekly: draft.weekly.filter((_, j) => j !== i) })}>Retirer</button>
             </div>
           ))}
-          <button type="button" onClick={() => setDraft({ ...draft, weekly: [...draft.weekly, { days: [0], start: "18:00", end: "21:00", periodIds: [] }] })}>Ajouter une plage</button>
+          <button type="button" onClick={() => setDraft({ ...draft, weekly: [...draft.weekly, { days: [0], start: "18:00", end: "21:00", periodIds: [], everyKWeeks: 1, weekOffset: 0 }] })}>Ajouter une plage</button>
 
           <h4>Fermetures exceptionnelles</h4>
           <p className="hint">Jours où la ressource est indisponible (élections, travaux…). Les séances de ces jours sont signalées comme annulées dans le calendrier daté.</p>

@@ -13,4 +13,4 @@ node dist/companion.mjs --origin https://<le site>   # --dev pour http://localho
 - `npm run build:exe -w @planif/companion` produit `compagnon.exe` (Node + programme + HiGHS, ~95 Mo, Windows) dans `packages/app/public/`. Sans option, il autorise `https://planification.potodugoud.fr`. Le calcul tourne dans un second processus (le même exécutable relancé avec `--solve-child`) ; annuler dans le navigateur le tue. L'exécutable n'est pas signé (avertissement SmartScreen).
 - `dist/` est autonome : copier le dossier entier (il contient `node_modules/highs`).
 
-Le chemin HiGHS natif n'a pas été essayé avec un vrai exécutable : seule la lecture de son fichier de solution est testée.
+HiGHS natif a été vérifié avec l'exécutable officiel HiGHS 1.16.0 (Windows, `highs-1.16.0-x86_64-windows-static-mit.zip`) : même optimum que le WebAssembly, annulation comprise. Pour le tester : `HIGHS_BIN=<chemin de highs.exe> npm test -w @planif/companion`. Pour l'utiliser : `compagnon.exe --highs <chemin de highs.exe>` (ou `highs` dans le PATH). HiGHS 1.16 n'accepte pas `--mip_rel_gap` en ligne de commande : le gap et le temps passent par un fichier d'options.

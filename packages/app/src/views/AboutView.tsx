@@ -27,8 +27,7 @@ export function AboutView() {
         <li>Les demandes sont des souhaits : le logiciel ne répond jamais « impossible », il propose le meilleur planning et explique ce qui manque. Les priorités se combinent en une note globale : une priorité haute l'emporte presque toujours, mais ce n'est pas un ordre strict.</li>
         <li>Le calcul est exact quand l'état « optimal » est affiché ; sinon c'est le meilleur planning trouvé dans le temps imparti.</li>
         <li>Un planning couvre un motif de 1 ou 2 semaines répété sur la période. Les fermetures et jours exceptionnels ne changent pas le motif : les séances touchées sont signalées comme annulées, sans rattrapage automatique.</li>
-        <li>L'équité entre demandeurs n'est pas encore un critère du calcul.</li>
-        <li>Les séances à rythme de plusieurs semaines ne sont pas encore transmises dans les fichiers de délégation.</li>
+        <li>L'équité est réglable : elle évite qu'une demande reçoive toutes ses séances pendant qu'une autre de même priorité n'en reçoit aucune (la 1re séance d'une demande vaut plus que la dernière). Elle ne remplace jamais la priorité, et elle joue entre demandes, pas entre associations.</li>
       </ul>
     </section>
   );

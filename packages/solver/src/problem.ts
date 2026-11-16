@@ -1,7 +1,8 @@
 import {
   DAYS_PER_WEEK,
   UNITS_PER_DAY,
-  cycleLength,
+  periodCycleWeeks,
+  ruleAppliesInWeek,
   demandsOfPeriod,
   parseEndTime,
   parseTime,
@@ -16,7 +17,9 @@ import { MilpModel } from "./milp.js";
 /**
  * Poids des objectifs. Ordre de grandeur voulu : satisfaire une demande (1 000 × priorité)
  * l'emporte sur conserver un créneau (100), qui l'emporte sur une préférence (10).
- * Le minimum garanti d'une demande pèse 5 fois plus. La stabilité « imposée » l'emporte sur tout
+ * Le minimum garanti d'une demande pèse 5 fois plus. L'équité (0 à 1) fait décroître la valeur des séances
+ * successives d'une même demande : la 1re compte pleinement, la dernière (1 - équité) fois sa valeur, si bien que
+ * deux demandes de même priorité se partagent les manques plutôt que l'une reçoit tout et l'autre rien. La stabilité « imposée » l'emporte sur tout
  * sauf sur les contraintes dures.
  */
 export interface Weights {
@@ -26,6 +29,7 @@ export interface Weights {
   stabilityImposed: number;
   preference: number;
   alternativePenalty: number;
+  equity: number;
 }
 
 export const DEFAULT_WEIGHTS: Weights = {
@@ -35,6 +39,7 @@ export const DEFAULT_WEIGHTS: Weights = {
   stabilityImposed: 100_000,
   preference: 10,
   alternativePenalty: 300,
+  equity: 0.3,
 };
 
 export interface ProblemOptions {
@@ -92,8 +97,12 @@ const sessionKey = (demand: string, resource: string, day: number, start: number
   `${demand}|${resource}|${day}|${start}|${offset}`;
 
 /** Intervalles ouverts [début, fin) d'une ressource un jour donné, fusionnés. */
-export function openIntervals(resource: Resource, day: number, periodId?: string): [number, number][] {
+/**
+ * `week` : semaine du cycle (comptée depuis le début de la période). Sans elle, réunit toutes les semaines.
+ */
+export function openIntervals(resource: Resource, day: number, periodId?: string, week?: number): [number, number][] {
   const raw = weeklyRulesFor(resource, periodId)
+    .filter((r) => week === undefined || ruleAppliesInWeek(r, week))
     .filter((r) => r.days.includes(day))
     .map((r): [number, number] => [parseTime(r.start), parseEndTime(r.end)])
     .sort((a, b) => a[0] - b[0]);
@@ -115,13 +124,17 @@ export function buildProblem(space: Space, options: ProblemOptions): Problem {
   const warnings: string[] = [];
   const planning = space.plannings.find((p) => p.periodId === options.periodId);
   const demands = demandsOfPeriod(space, options.periodId);
-  const cycleWeeks = cycleLength(demands);
+  const cycleWeeks = periodCycleWeeks(space, options.periodId);
   const resourcesById = new Map(space.resources.map((r) => [r.id, r]));
 
   // Disponibilités hebdomadaires précalculées
-  const open = new Map<string, [number, number][][]>();
+  // [semaine du cycle][jour] -> plages ouvertes
+  const open = new Map<string, [number, number][][][]>();
   for (const r of space.resources) {
-    open.set(r.id, Array.from({ length: DAYS_PER_WEEK }, (_, d) => openIntervals(r, d, options.periodId)));
+    open.set(
+      r.id,
+      Array.from({ length: cycleWeeks }, (_, w) => Array.from({ length: DAYS_PER_WEEK }, (_, d) => openIntervals(r, d, options.periodId, w))),
+    );
     if (r.weekly.length === 0) warnings.push(`La ressource « ${r.name} » n'a aucun horaire : elle n'est jamais disponible.`);
   }
   for (const r of space.resources) {
@@ -133,8 +146,11 @@ export function buildProblem(space: Space, options: ProblemOptions): Problem {
 
   const blocked = planning?.blocked ?? [];
   const isFree = (resourceId: string, day: number, s: number, e: number, weeks: number[]): boolean => {
-    const intervals = open.get(resourceId)?.[day] ?? [];
-    if (!intervals.some(([a, b]) => s >= a && e <= b)) return false;
+    // la ressource doit être ouverte pendant toutes les semaines où la séance a lieu
+    for (const w of weeks) {
+      const intervals = open.get(resourceId)?.[w]?.[day] ?? [];
+      if (!intervals.some(([a, b]) => s >= a && e <= b)) return false;
+    }
     for (const b of blocked) {
       if (b.resourceId !== resourceId || b.day !== day) continue;
       if (b.cycleWeek !== undefined && !weeks.includes(b.cycleWeek)) continue;
@@ -160,6 +176,7 @@ export function buildProblem(space: Space, options: ProblemOptions): Problem {
 
   for (const d of demands) {
     const sessionVars: number[] = [];
+    const equity = weights.equity > 0 && d.sessions > 1;
     const perSlot = new Map<string, number[]>(); // (décalage, jour) -> variables
 
     // Lieux candidats : principaux, puis alternatives
@@ -225,7 +242,8 @@ export function buildProblem(space: Space, options: ProblemOptions): Problem {
             }
 
             // Objectif
-            let gain = weights.satisfaction * d.priority;
+            // avec l'équité, la valeur de la satisfaction est portée par les variables de palier (plus bas)
+            let gain = equity ? 0 : weights.satisfaction * d.priority;
             if (alternative) gain -= weights.alternativePenalty;
             if (d.preferredDays.length > 0 && d.preferredDays.includes(day)) gain += weights.preference;
             if (d.preferredRange && start >= parseTime(d.preferredRange.start) && end <= parseEndTime(d.preferredRange.end)) {
@@ -244,6 +262,15 @@ export function buildProblem(space: Space, options: ProblemOptions): Problem {
     // Nombre de séances : au plus celui demandé, minimum garanti récompensé
     if (sessionVars.length > 0) {
       model.addRow(sessionVars.map((v) => [v, 1] as const), "<=", d.sessions);
+      if (equity) {
+        // paliers : la k-ième séance placée vaut de moins en moins (le solveur remplit les premiers paliers d'abord)
+        const tiers = Array.from({ length: d.sessions }, (_, k) => {
+          const u = model.addContinuous(1);
+          model.addObjective(u, weights.satisfaction * d.priority * (1 - (weights.equity * k) / d.sessions));
+          return u;
+        });
+        model.addRow([...sessionVars.map((v) => [v, 1] as const), ...tiers.map((u) => [u, -1] as const)], "=", 0);
+      }
       const minimum = d.minSessions ?? d.sessions;
       const a = model.addContinuous(minimum);
       model.addRow([[a, 1], ...sessionVars.map((v) => [v, -1] as const)], "<=", 0);

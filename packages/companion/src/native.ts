@@ -54,14 +54,15 @@ export function nativeEngine(binary: string): Engine {
       try {
         const lp = join(dir, "model.lp");
         const sol = join(dir, "solution.txt");
+        const opt = join(dir, "options.txt");
         await writeFile(lp, model.toLP());
+        // HiGHS 1.16 : le gap et le temps passent par un fichier d'options (la ligne de commande les refuse)
+        await writeFile(opt, `time_limit = ${options.timeLimitSec ?? 60}
+mip_rel_gap = ${options.gap ?? 0.01}
+`);
         const t0 = Date.now();
         await new Promise<void>((resolve, reject) => {
-          const child = spawn(
-            binary,
-            [lp, "--solution_file", sol, "--time_limit", String(options.timeLimitSec ?? 60), "--mip_rel_gap", String(options.gap ?? 0.01)],
-            { stdio: "ignore", signal },
-          );
+          const child = spawn(binary, ["--model_file", lp, "--options_file", opt, "--solution_file", sol], { stdio: "ignore", signal, windowsHide: true });
           child.on("error", reject);
           child.on("exit", () => resolve());
         });

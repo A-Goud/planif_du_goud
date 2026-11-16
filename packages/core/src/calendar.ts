@@ -1,4 +1,4 @@
-import { cycleLength, demandsOfPeriod } from "./cycle.js";
+import { demandsOfPeriod, periodCycleWeeks } from "./cycle.js";
 import type { Closure, Period, Space } from "./model.js";
 import { formatTime, parseEndTime, parseTime, weekday } from "./time.js";
 
@@ -43,7 +43,7 @@ export function projectPeriod(space: Space, periodId: string): DatedSession[] {
   const planning = space.plannings.find((p) => p.periodId === periodId);
   if (!period || !planning) return [];
   const demands = new Map(demandsOfPeriod(space, periodId).map((d) => [d.id, d]));
-  const cycle = Math.max(planning.cycleWeeks, cycleLength([...demands.values()]), 1);
+  const cycle = Math.max(planning.cycleWeeks, periodCycleWeeks(space, periodId), 1);
   const resources = new Map(space.resources.map((r) => [r.id, r]));
   const monday = mondayOf(period.start);
   const out: DatedSession[] = [];

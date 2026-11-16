@@ -262,13 +262,17 @@ describe("délégation", () => {
       },
     ];
     const r = buildDelegation(s, { requesterId: "basket", periodIds: ["p1"] });
-    expect(r.sessionCount).toBe(2);
-    expect(r.warnings.join(" ")).toMatch(/rythme/); // d2 : toutes les 2 semaines
-    expect(r.space.resources.map((x) => x.id)).toEqual(["gym"]);
+    expect(r.sessionCount).toBe(3);
+    expect(r.warnings).toEqual([]);
+    expect(r.space.resources.map((x) => x.id).sort()).toEqual(["gym", "salle1"]);
     // d1 : 1 h 30 mardi 18:00 et jeudi 19:30, deux horaires distincts
-    expect(r.space.resources[0]!.weekly).toEqual([
-      { days: [1], start: "18:00", end: "19:30", periodIds: [] },
-      { days: [3], start: "19:30", end: "21:00", periodIds: [] },
+    expect(r.space.resources.find((x) => x.id === "gym")!.weekly).toEqual([
+      { days: [1], start: "18:00", end: "19:30", periodIds: [], everyKWeeks: 1, weekOffset: 0 },
+      { days: [3], start: "19:30", end: "21:00", periodIds: [], everyKWeeks: 1, weekOffset: 0 },
+    ]);
+    // d2 : toutes les 2 semaines -> créneau qui n'existe qu'une semaine sur deux
+    expect(r.space.resources.find((x) => x.id === "salle1")!.weekly).toEqual([
+      { days: [2], start: "10:00", end: "11:00", periodIds: [], everyKWeeks: 2, weekOffset: 0 },
     ]);
     expect(r.space.periods.map((p) => p.id)).toEqual(["p1"]);
     // c'est un fichier ordinaire
@@ -294,8 +298,8 @@ describe("délégation", () => {
     ];
     const r = buildDelegation(s, { requesterId: "basket", periodIds: ["p1", "p2"] });
     const rules = r.space.resources[0]!.weekly;
-    expect(rules).toContainEqual({ days: [1], start: "18:00", end: "21:00", periodIds: ["p1"] }); // 2 séances contiguës fusionnées
-    expect(rules).toContainEqual({ days: [2], start: "18:00", end: "19:30", periodIds: ["p2"] });
+    expect(rules).toContainEqual({ days: [1], start: "18:00", end: "21:00", periodIds: ["p1"], everyKWeeks: 1, weekOffset: 0 }); // 2 séances contiguës fusionnées
+    expect(rules).toContainEqual({ days: [2], start: "18:00", end: "19:30", periodIds: ["p2"], everyKWeeks: 1, weekOffset: 0 });
   });
   it("refuse une règle qui vise une période inconnue", () => {
     const s = sample();
