@@ -49,7 +49,7 @@ Le compagnon n'écoute que `127.0.0.1:47821` et n'accepte que cette origine.
 
 ## Limites connues
 
-- **Compagnon et navigateurs** : le site est en ligne sur `https://planification.potodugoud.fr` et le calcul dans la page y fonctionne. Le compagnon répond correctement (origine, contrôle préalable « réseau privé »), mais le navigateur intégré de l'outil de développement bloque l'accès d'une page HTTPS à `http://127.0.0.1` ; cela n'a donc pas pu être vérifié de bout en bout. À essayer dans Chrome/Edge ; Safari peut bloquer ce contenu mixte.
+- **Compagnon et navigateurs** : vérifié de bout en bout dans Chrome sur `https://planification.potodugoud.fr` (détection, choix du solveur, calcul avec `compagnon.exe`). Non vérifié dans Firefox, Edge et Safari ; Safari peut bloquer l'accès d'une page HTTPS à `http://127.0.0.1`. Le navigateur intégré à l'outil de développement le bloque aussi, ce qui ne reflète pas Chrome.
 - **Avertissement Windows** : le lanceur `.cmd` n'est pas signé ; Windows peut afficher un avertissement au premier lancement (expliqué dans la page).
 - **Pas de mises à jour automatiques** du compagnon : si le protocole change, la page ne le détectera plus et l'utilisateur devra retélécharger l'archive.
 - **HiGHS natif** : jamais essayé avec un vrai exécutable (voir `packages/companion/README.md`).
