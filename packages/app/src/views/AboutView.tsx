@@ -16,9 +16,9 @@ export function AboutView() {
 
       <h3>Le compagnon de calcul (facultatif)</h3>
       <ul>
-        <li>Pour les gros problèmes. C'est un programme à lancer vous-même sur votre ordinateur, qui nécessite <strong>Node.js</strong>.</li>
+        <li>Pour les gros problèmes. C'est un programme à lancer vous-même sur votre ordinateur : sous Windows, un seul fichier à télécharger (<code>compagnon.exe</code>) ; sur d'autres systèmes, une archive qui nécessite <strong>Node.js</strong>.</li>
         <li><strong>Laissez sa fenêtre ouverte</strong> pendant les calculs ; fermez-la quand vous avez fini.</li>
-        <li>Au premier lancement, Windows peut afficher un avertissement (script non signé), et le navigateur peut demander l'autorisation d'accéder à un programme de votre réseau local : acceptez uniquement si vous venez de le lancer.</li>
+        <li>Au premier lancement, Windows affiche un avertissement (programme non signé : « Informations complémentaires », puis « Exécuter quand même »), et le navigateur peut demander l'autorisation d'accéder à un programme de votre réseau local : acceptez uniquement si vous venez de le lancer.</li>
         <li>Il n'écoute que votre ordinateur et n'accepte que ce site. Il n'est joignable depuis aucune autre machine.</li>
       </ul>
 

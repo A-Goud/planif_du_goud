@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "build:site": "npm run build -w @planif/companion && npm run build -w @planif/app",
+    "build:site": "npm run build -w @planif/companion && npm run build:exe -w @planif/companion && npm run build -w @planif/app",
     "test": "npm test --workspaces --if-present"
   }
 }

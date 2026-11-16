@@ -11,7 +11,7 @@ const dist = join(root, "dist");
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 
-for (const [input, file] of [["src/cli.ts", "companion.mjs"], ["src/solve-worker.ts", "solve-worker.mjs"]]) {
+for (const [input, file] of [["src/cli.ts", "companion.mjs"]]) {
   const bundle = await rolldown({ input: join(root, input), platform: "node", external: ["highs"] });
   await bundle.write({ dir: dist, format: "esm", entryFileNames: file });
 }

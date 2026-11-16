@@ -736,15 +736,26 @@ function CompanionHelp({ onClose }: { onClose(): void }) {
         Petit programme qui calcule à la place du navigateur, sur votre ordinateur : plus de mémoire, pas de blocage de la page, et un moteur natif si
         HiGHS est installé. Vos données ne quittent pas la machine : le compagnon n'écoute que cet ordinateur et n'accepte que ce site ({origin}).
       </p>
+      <h4>Sous Windows : un seul fichier</h4>
       <ol>
-        <li>Installez <strong>Node.js</strong> (version 20 ou plus récente) si ce n'est pas fait.</li>
-        <li><a href="compagnon.zip" download>Téléchargez le compagnon</a> (archive .zip) et décompressez-la où vous voulez : elle donne un dossier « compagnon ».</li>
-        <li>Placez le lanceur ci-dessous dans le dossier « compagnon » et double-cliquez dessus. Laissez la fenêtre ouverte pendant les calculs.</li>
+        <li><a href="compagnon.exe" download>Téléchargez compagnon.exe</a> (environ 95 Mo, rien d'autre à installer).</li>
+        <li>Double-cliquez dessus et <strong>laissez la fenêtre ouverte</strong> pendant les calculs.</li>
         <li>Revenez ici et cliquez sur « Rechercher le compagnon ».</li>
       </ol>
-      <p className="hint">Windows peut afficher un avertissement à la première exécution du lanceur : c'est normal pour un script non signé.</p>
+      <p className="hint">
+        Au premier lancement, Windows affiche « Windows a protégé votre PC » : le programme n'est pas signé. Cliquez sur « Informations complémentaires »,
+        puis « Exécuter quand même ». Le navigateur peut aussi demander l'autorisation d'accéder à un programme de votre réseau local : acceptez.
+      </p>
+      <details>
+        <summary>Autres systèmes (macOS, Linux) ou si vous préférez Node.js</summary>
+        <ol>
+          <li>Installez <strong>Node.js</strong> (version 20 ou plus récente).</li>
+          <li><a href="compagnon.zip" download>Téléchargez l'archive du compagnon</a> et décompressez-la : elle donne un dossier « compagnon ».</li>
+          <li>Dans ce dossier, lancez : <code>node companion.mjs --origin {origin}</code> (sous Windows, le lanceur ci-dessous le fait pour vous).</li>
+        </ol>
+        <button onClick={download}>Télécharger le lanceur Windows (.cmd)</button>
+      </details>
       <div className="form-actions">
-        <button className="primary" onClick={download}>Télécharger le lanceur</button>
         <button onClick={onClose}>Fermer</button>
       </div>
     </div>
