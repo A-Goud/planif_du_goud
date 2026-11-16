@@ -16,33 +16,17 @@ Produit `packages/app/dist/` : c'est tout ce qu'il faut publier. Il contient `in
 ## 2. DNS et HTTPS
 
 - Créer l'enregistrement DNS `planification` (A/AAAA vers le serveur, ou CNAME).
-- Obtenir un certificat pour `planification.potodugoud.fr` (par exemple Let's Encrypt) et ne servir **qu'en HTTPS**.
+- Le certificat est obtenu automatiquement par Caddy dès que le DNS pointe vers le serveur (ne servir **qu'en HTTPS**).
 
-## 3. Serveur web (exemple nginx)
+## 3. Serveur web (Caddy)
 
-```nginx
-server {
-  listen 443 ssl http2;
-  server_name planification.potodugoud.fr;
-  # ssl_certificate / ssl_certificate_key : selon votre outil (certbot, etc.)
+Le serveur utilise déjà Caddy, qui obtient et renouvelle seul le certificat HTTPS. Copier `dist` dans `/var/www/planification`, puis ajouter à `/etc/caddy/Caddyfile` le bloc de [deploy/Caddyfile.planification](deploy/Caddyfile.planification) (en-têtes de sécurité, politique CSP, cache) et recharger :
 
-  root /var/www/planification;   # contenu de packages/app/dist
-  index index.html;
-
-  types { application/wasm wasm; }   # en plus des types habituels (include mime.types;)
-
-  add_header Strict-Transport-Security "max-age=31536000" always;
-  add_header X-Content-Type-Options "nosniff" always;
-  add_header Referrer-Policy "no-referrer" always;
-  # connect-src : le compagnon local ; 'wasm-unsafe-eval' : moteur de calcul WebAssembly
-  add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self'; connect-src 'self' http://127.0.0.1:47821; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
-
-  location = /index.html { add_header Cache-Control "no-cache"; }
-  location /assets/      { add_header Cache-Control "public, max-age=31536000, immutable"; }
-}
+```bash
+sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%Y%m%d-%H%M%S)
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
 ```
-
-Les `add_header` d'un bloc `location` remplacent ceux du serveur : si vous gardez des en-têtes de sécurité, répétez-les dans chaque `location` qui ajoute un `Cache-Control`.
 
 Cette politique (CSP) a été testée sur le site construit : le calcul dans le navigateur et via le compagnon fonctionnent, sans erreur dans la console.
 
@@ -65,7 +49,13 @@ Le compagnon n'écoute que `127.0.0.1:47821` et n'accepte que cette origine.
 
 ## Limites connues
 
-- **Compagnon et navigateurs** : testé uniquement avec le navigateur intégré à l'outil de développement, sur `http://` local. Chrome et Edge autorisent en principe une page HTTPS à joindre `http://127.0.0.1`, mais cela n'a pas été vérifié depuis le site réel ; Safari peut bloquer ce contenu mixte.
+- **Compagnon et navigateurs** : le site est en ligne sur `https://planification.potodugoud.fr` et le calcul dans la page y fonctionne. Le compagnon répond correctement (origine, contrôle préalable « réseau privé »), mais le navigateur intégré de l'outil de développement bloque l'accès d'une page HTTPS à `http://127.0.0.1` ; cela n'a donc pas pu être vérifié de bout en bout. À essayer dans Chrome/Edge ; Safari peut bloquer ce contenu mixte.
 - **Avertissement Windows** : le lanceur `.cmd` n'est pas signé ; Windows peut afficher un avertissement au premier lancement (expliqué dans la page).
 - **Pas de mises à jour automatiques** du compagnon : si le protocole change, la page ne le détectera plus et l'utilisateur devra retélécharger l'archive.
 - **HiGHS natif** : jamais essayé avec un vrai exécutable (voir `packages/companion/README.md`).
+
+## État du déploiement (16 novembre 2026)
+
+- Serveur : Ubuntu, Caddy 2.6.2 (déjà utilisé pour `musique` et `jeux`), fichiers dans `/var/www/planification`.
+- Mise à jour du site : `npm run build:site`, puis `tar -cf - -C packages/app/dist . | ssh ubuntu@<serveur> 'sudo tar -xf - --no-same-owner -C /var/www/planification'`. Pas de rechargement de Caddy nécessaire.
+- Sauvegardes de la configuration : `/etc/caddy/Caddyfile.bak-*`.
